@@ -2,19 +2,16 @@
 using System.Collections.Generic;
 using System.Data.Odbc;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using Db2ModelMapper.Core.ModelsAttributes;
-using Tomlyn;
+using Db2ModelMapper.Core.Utils;
 
 namespace Db2ModelMapper.Core
 {
     public class Db2ModelMapper<T>
         where T : class
     {
-        private static readonly log4net.ILog Log = log4net.LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
-
         /// <summary>
         /// Creates a basic model mapper for <typeparamref name="T"/>.
         /// Automatically reads the configuration file and connects to the db.
@@ -46,6 +43,37 @@ namespace Db2ModelMapper.Core
         /// The givven configuration
         /// </summary>
         public Configurator Configuration { get; private set; }
+
+        /// <summary>
+        /// Get select result as a Dictionary accordin to the Db2KeyValue attribute.
+        /// </summary>
+        /// <param name="searchSelector">where clause</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public Dictionary<string, string> KeyValueSelect(List<Db2KeyValue<T>> searchSelector)
+        {
+            if (!typeof(T).GetProperties().Any(p => p.GetCustomAttribute<Db2KeyValue>() != null))
+            {
+                throw new ArgumentException("T is not a KeyValue table");
+            }
+
+            var keyProperty = typeof(T).GetProperties().FirstOrDefault(p => p.GetCustomAttribute<Db2KeyValue>() != null
+                                                            && (p.GetCustomAttribute<Db2KeyValue>() as Db2KeyValue).Usage == Db2KeyValueUsage.Key);
+
+            var valueProperty = typeof(T).GetProperties().FirstOrDefault(p => p.GetCustomAttribute<Db2KeyValue>() != null
+                                                            && (p.GetCustomAttribute<Db2KeyValue>() as Db2KeyValue).Usage == Db2KeyValueUsage.Value);
+
+            var select = this.Select(searchSelector);
+
+            var toReturn = new Dictionary<string, string>();
+
+            foreach (var x in select)
+            {
+                toReturn.Add(keyProperty.GetValue(x) as string, valueProperty.GetValue(x) as string);
+            }
+
+            return toReturn;
+        }
 
         /// <summary>
         /// Select by a where clause
@@ -97,7 +125,7 @@ namespace Db2ModelMapper.Core
                             }
                             else
                             {
-                                Log.Warn($"[ModelMapper/Select] -> Property not found for value '{result[c].ToString().TrimEnd()}' at index {c}. Skipped");
+                                Logger.Warn($"[ModelMapper/Select] -> Property not found for value '{result[c].ToString().TrimEnd()}' at index {c}. Skipped");
                             }
                         }
 
@@ -107,7 +135,7 @@ namespace Db2ModelMapper.Core
             }
             catch (Exception ex)
             {
-                Log.Error("[ModelMapper/Select] -> Error while query execution", ex);
+                Logger.Error("[ModelMapper/Select] -> Error while query execution", ex);
             }
 
             return toReturn;
@@ -153,7 +181,7 @@ namespace Db2ModelMapper.Core
                     }
                 }
 
-                Log.Debug($"{keyValueDic.Count} columns ready to update");
+                Logger.Debug($"{keyValueDic.Count} columns ready to update");
 
                 var query = this.BuildUpdateQuery(keyValueDic, keyValuePrimaryKeys);
 
@@ -165,17 +193,17 @@ namespace Db2ModelMapper.Core
                     var result = sqlCommand.ExecuteNonQuery();
                     if (result == 0)
                     {
-                        Log.Warn("Query execution effected no rows");
+                        Logger.Warn("Query execution effected no rows");
                     }
                     else
                     {
-                        Log.Info($"{result} rows effected");
+                        Logger.Info($"{result} rows effected");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error($"[ModelMapper/Update] -> Error while query execution/preparation for entity of type {typeof(T).Name}", ex);
+                Logger.Error($"[ModelMapper/Update] -> Error while query execution/preparation for entity of type {typeof(T).Name}", ex);
                 return false;
             }
 
@@ -318,7 +346,7 @@ namespace Db2ModelMapper.Core
                         }
                         else
                         {
-                            Log.Warn($"Unable to cast value {value} to DateTime with specified format, value will be DateTime.Min");
+                            Logger.Warn($"Unable to cast value {value} to DateTime with specified format, value will be DateTime.Min");
 
                             value = DateTime.MinValue;
                         }
@@ -335,7 +363,7 @@ namespace Db2ModelMapper.Core
             }
             catch (Exception ex)
             {
-                Log.Error("Errore in TrySetProperty", ex);
+                Logger.Error("Errore in TrySetProperty", ex);
             }
 
             return false;
@@ -345,7 +373,7 @@ namespace Db2ModelMapper.Core
         {
             if (Configuration.TraceQuery)
             {
-                Log.Info($"[ModelMapper/Query, {FileName}] ->\n {query}");
+                Logger.Info($"[ModelMapper/Query, {FileName}] ->\n {query}");
             }
         }
 
