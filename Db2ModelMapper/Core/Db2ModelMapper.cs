@@ -113,6 +113,9 @@ namespace Db2ModelMapper.Core
                                 {
                                     propName = prop.Name;
                                     break;
+                                } else
+                                {
+                                    column = null;
                                 }
                             }
 
